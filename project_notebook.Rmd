@@ -1,0 +1,43 @@
+---
+title: "Udacity EDA Project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The data
+
+For this project I downloaded and cleaned the data of more than 2500 listings of used Ford Focus cars from the biggest Hungarian online used car listing site, [Hasznaltauto.hu](https://www.hasznaltauto.hu). I chose specificaly the Ford Focus for this task because 
+
+* it's one of the most popular models on the market in it's category,
+* it has a history of [almost 20 years](https://en.wikipedia.org/wiki/Ford_Focus) therefore quite a few versions are out there, 
+* it offers a wide range of technical and aesthetic varieties.
+
+So I hope the dataset is diverse enough to offer some interesting insights. My major question is quite obviuous: what factors affect the price of a used Ford Focus the most on the (Hungarian) market? Besides that some other interesting connections might emerge from the dataset. 
+
+This is a bit risky experiment, as I really don't have any specific idea on how the data looks like and what to expect from it, even though I already spent a few hours wrestling with it. Also a bit of a downside is that the dataset contains relatively few truly continous variables (besides price, kilometers run and age), as many of the numeric columns are actually either categorical (eg. number of doors) or ordinal (eg. engine capacity).
+
+Nevertheless I'm quite curious about this data, which according to my experience is a good start for any analysis.
+
+#### Data wrangling
+
+The detailed description of data wrangling process is not in the scope of this project, but I included the scraping and cleaning Python scripts in the `data-scraper` directory. I used Python with pandas, requests, BeautifulSoup and MongoDB as an itermediary data store. 
+
+I only collected the basic details of the cars, and not included most of the available text fields (eg. special technical and other specifications) and the longer descriptions from the sellers (these could also hold valuable data). After getting the raw data I dropped those fields that didn't contain enough observations and also filtered out those listings where no price (in euro) was available. 
+
+For the sake of the project I also translated column names and categorical values from Hungarian to English, and made sure that the final dataset contains no identifiable data (eg. title, url or listing id, license plate no., etc.).
+
+_(**Note:** The data was obtained on July, 27 and was not updated since then. This sample is only a tiny fraction of the whole database of Hasznaltautok.hu, and not intended for any purposes other than this learning project.)_
+
+
+```{r}
+car_data <- read.csv('used_ford_focuses.csv')
+```
+
+## Univariate analysis
+
+```{r}
+library(ggplot2)
+```
