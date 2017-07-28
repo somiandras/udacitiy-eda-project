@@ -2550,4 +2550,4 @@ No_of_doors,C-Max_variant,Trunk_capacity_liters,Drive,Capacity,Kilometers_run,Fo
 5.0,False,316.0,All-wheel,2300.0,9.0,Hatchback,Digital A/C,,1437.0,350.0,Excellent,44472,2025.0,Gasoline,2016,,Manual,6.0,No documents,,
 5.0,False,316.0,All-wheel,2300.0,,Hatchback,Digital A/C,,1437.0,350.0,Excellent,44848,2025.0,Gasoline,2017,,Manual,6.0,No documents,,False
 5.0,False,316.0,All-wheel,2300.0,9500.0,Hatchback,Automatic A/C,,1437.0,350.0,Normal,46969,2025.0,Gasoline,2016,,Manual,6.0,"Valid, domestic",Black,True
-5.0,False,350.0,Front-wheel,1596.0,133890.0,Hatchback,Manual A/C,2018-05-31,1080.0,101.0,Spared,0,1570.0,Gasoline,2003,,Manual,5.0,"Valid, domestic",Silver,True
+5.0,False,350.0,Front-wheel,1596.0,133890.0,Hatchback,Manual A/C,2018-05-31,1080.0,101.0,Spared,2031,1570.0,Gasoline,2003,,Manual,5.0,"Valid, domestic",Silver,True
