@@ -157,4 +157,4 @@ if __name__ == '__main__':
     df.drop(['Transmission', 'Documents_type', 'Évjárat', 'Color'], axis=1, inplace=True)
 
     # Save to file
-    df.to_csv('used_ford_focuses.csv', encoding='utf-8', index=False)
+    df.to_csv('../used_ford_focuses.csv', encoding='utf-8', index=False)
