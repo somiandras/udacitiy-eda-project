@@ -1,11 +1,13 @@
 ---
-title: "Udacity EDA Project"
+title: "Price of a Used Ford Focus"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+#### Project for Udacity EDA course by Andras Somi
 
 ## The data
 
@@ -15,29 +17,187 @@ For this project I downloaded and cleaned the data of more than 2500 listings of
 * it has a history of [almost 20 years](https://en.wikipedia.org/wiki/Ford_Focus) therefore quite a few versions are out there, 
 * it offers a wide range of technical and aesthetic varieties.
 
-So I hope the dataset is diverse enough to offer some interesting insights. My major question is quite obviuous: what factors affect the price of a used Ford Focus the most on the (Hungarian) market? Besides that some other interesting connections might emerge from the dataset. 
+So I hope the dataset is diverse enough to offer some interesting insights. My major questions are quite obviuous: 
 
-This is a bit risky experiment, as I really don't have any specific idea on how the data looks like and what to expect from it, even though I already spent a few hours wrestling with it. Also a bit of a downside is that the dataset contains relatively few truly continous variables (besides price, kilometers run and age), as many of the numeric columns are actually either categorical (eg. number of doors) or ordinal (eg. engine capacity).
+1. What factors affect the price of a used Ford Focus the most on the (Hungarian) market? 
+2. Is it possible to predict the 'fair' value of a certain car, therefore find pricing anomalies on the market? 
 
-Nevertheless I'm quite curious about this data, which according to my experience is a good start for any analysis.
+Besides that some other interesting connections might emerge. A bit of a downside of the dataset is that it contains relatively few truly continous variables (besides price and kilometers run, and the year the car was manufactured as a proxy for age), as many of the numeric columns are actually either categorical (eg. number of doors) or ordinal (eg. engine capacity).
+
+Nevertheless I'm quite curious about this data, which based on my experience is a good start for any analysis.
 
 #### Data wrangling
 
-The detailed description of data wrangling process is not in the scope of this project, but I included the scraping and cleaning Python scripts in the `data-scraper` directory. I used Python with pandas, requests, BeautifulSoup and MongoDB as an itermediary data store. 
+The detailed description of data wrangling process is not in the scope of this project, but I included the Python scripts for scraping and cleaning the data in the `data-scraper` directory. I used `pandas`, `requests`, `BeautifulSoup` and `pymongo` for MongoDB as an itermediary data store. 
 
-I only collected the basic details of the cars, and not included most of the available text fields (eg. special technical and other specifications) and the longer descriptions from the sellers (these could also hold valuable data). After getting the raw data I dropped those fields that didn't contain enough observations and also filtered out those listings where no price (in euro) was available. 
+I only collected the basic details of the cars, not including most of the available text fields (eg. special technical and comfort specifications) and the longer descriptions from the sellers (though these could also hold valuable data for later analysis). After getting the raw data I dropped those fields that didn't contain enough observations and also filtered out those listings where no price (in euro) was available. 
 
-For the sake of the project I also translated column names and categorical values from Hungarian to English, and made sure that the final dataset contains no identifiable data (eg. title, url or listing id, license plate no., etc.).
+For the sake of the project I also translated column names and categorical values from Hungarian to English, and made sure that the final dataset contains no directly identifiable data (eg. title, url or listing id, etc.).
 
-_(**Note:** The data was obtained on July, 27 and was not updated since then. This sample is only a tiny fraction of the whole database of Hasznaltautok.hu, and not intended for any purposes other than this learning project.)_
+_(**Note:** The data was obtained on July, 27 and was not updated since then. This sample is only a tiny fraction of the whole database of Hasznaltauto.hu, and not intended for any purposes other than this learning project. I am not affiliated to Hasznaltauto.hu in any form.)_
 
 
-```{r}
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+# Library imports
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+
+# Initial dataset
 car_data <- read.csv('used_ford_focuses.csv')
+
+# New variables constructed for the analysis
+car_data$Undamaged <- car_data$Condition %in% c('Excellent', 'Normal', 'Undamaged', 'Spared', 'Recent')
+car_data$age_in_years <- 2017 - car_data$Year_of_manufacturing
+
+undamaged_used_cars <- subset(car_data, Undamaged == TRUE & Kilometers_run >= 1000)
 ```
 
 ## Univariate analysis
 
-```{r}
-library(ggplot2)
+First, let's have a look at the price variable. The distribution is positively skewed, the long tail reaches up to well over EUR 40 000, while the peak of the distribution is around only EUR 2-3000, with some observation as low as few hundred euros (or even lower). There's also a little secondary peak at around EUR 14 000 that might be interesting later on.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(Price_EUR)) + geom_histogram(bins = 50)
+```
+
+The very low price points might belong to damaged cars. The dataset contains descriptions for the condition of the cars, but the expressions are somewhat vague, it's hard to rank the extent of damage. Nevertheless we can construct a boolean variable for indicating whether according to the seller the car is damaged to a certain level (eg. 'light damage', 'damaged front', etc.) or not (eg. the condition is 'normal', 'excellent', 'undamaged', etc.). This `Undamaged` variable might help improve later visualisations too.
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+
+```
+
+When looking at the new variable it seems that from 2552 observation, only 75 is labeled as damaged. The majority of damaged cars are indeed offered for sale under EUR 1000, though it's not a huge quantity that would substantially change the distribution of prices. Still, it might be useful to filter out these cars.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(Price_EUR)) + 
+  geom_histogram(bins = 50, aes(fill=Undamaged)) +
+  facet_grid(Undamaged ~.)
+```
+
+It's worth looking at the distribution of the logarithm of the prices to get something closer to a normal distribution. Using log10 we get a more symmetric, bell-curve shape. I still would not call it 'normal' based on a single histogram, but it still should be more useful than the raw distribution.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(subset(car_data, car_data$Undamaged == TRUE), aes(Price_EUR)) +
+  geom_histogram() +
+  scale_x_log10() +
+  ggtitle('Distribution of log10(Price_EUR)')
+```
+
+Just to try out other transformations, let's see what happens if we take the square root of the price. Still skewed, log10 x-axis looks better.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(subset(car_data, car_data$Undamaged == TRUE), aes(Price_EUR)) +
+  geom_histogram() +
+  scale_x_sqrt()
+```
+
+The other important continous variable is the number of kilometers each car run in their lifetime. Intuitively it should be a key factor in assessing the value of a used car (we'll see it later). 
+
+The shape of the distribution (excluding damaged cars) is fairly symmetrical, except the huge bar at 0. This is due to cars in the dataset that are either new (some dealerships do advertise new cars on the site) or incorrectly stated as having run 0 or very few kilometers.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(subset(car_data, Undamaged == TRUE), aes(Kilometers_run)) +
+  geom_histogram()
+```
+
+It might be useful to exclude these cars for certain aspects of the analyis. For this purpose I consider a car 'new' or 'unusued' if it ran less than 1000km. Filtering these out shows a prettier distribution: it's slightly leptokurtic, but fairly (maybe even surprisingly) close to normal distribution.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(undamaged_used_cars, aes(x=Kilometers_run)) +
+  geom_histogram(aes(y=..density..), fill='white', color='grey') +
+  stat_function(fun=dnorm, args=c(mean=mean(undamaged_used_cars$Kilometers_run), sd=sd(undamaged_used_cars$Kilometers_run)), color='blue', linetype='dashed') +
+  ggtitle('Distribution of kilometers run by undamaged, used cars')
+```
+
+The q-q plots seem to support this, both the log of the price and the kilometers show some deviation from the theoretical normal distribution, not only at the edges but around the mean too (otherwise the plot would be a straight line). Nevertheless these two variables should play important roles later on.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+set.seed(1000)
+
+km_qq <- ggplot(subset(car_data, Undamaged == TRUE & Kilometers_run >= 1000)) +
+  stat_qq(alpha=0.1, aes(sample=Kilometers_run))
+
+price_qq <- ggplot(subset(car_data, Undamaged == TRUE & Kilometers_run >= 1000)) +
+  stat_qq(alpha=0.1, aes(sample=log10(Price_EUR)))
+
+grid.arrange(price_qq, km_qq, nrow=1, ncol=2)
+```
+
+Another continous variable worth looking at is the age of the cars. In the dataset we only have the year when the car was manufactured (only a small subset contains the month as well), from which we can construct the `age_in_years` variable (subtracting the year of manufacturing from 2017), that is a reasonable proxy to the real age of the car (it might miss the real age by roughly half year in either direction as the data was downloaded slightly after mid-2017).
+
+By filtering out the cars with less than 1000 kilometers the distribution is slightly negatively skewed with a noticable peak at the mode of 13 years and a smaller secondary peak around 5-6 years. The median is 10 years (slightly above the mean of 9.5 years), with the quartiles being 5 and 13 years. Plotting the density of theoretical normal distribution with the same mean and standard error reveals the differences.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+car_data$age_in_years <- 2017 - car_data$Year_of_manufacturing
+
+ggplot(subset(car_data, Undamaged == TRUE & Kilometers_run >= 1000), aes(age_in_years)) +
+  geom_histogram(binwidth = 1, aes(y=..density..), colour='grey', fill='white') +
+  stat_function(fun=dnorm, args=c(mean=mean(car_data$age_in_years), sd=sd(car_data$age_in_years)), color='blue', linetype='dashed')
+```
+
+## Bivariate analysis
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+fuel_levels <- c('Electric', 'Ethanol', 'Diesel', 'Gasoline', 'Gasoline/LPG')
+
+age_plot <- ggplot(subset(car_data, Undamaged == TRUE & Kilometers_run >= 1000 & Fuel != ''), aes(x=reorder(x=Fuel, X=age_in_years, FUN=mean), y=age_in_years)) +
+  geom_boxplot()
+
+price_plot <- ggplot(subset(car_data, Undamaged == TRUE & Kilometers_run >= 1000 & Fuel != ''), aes(x=reorder(x=Fuel, X=log10(Price_EUR), FUN=mean), y=log10(Price_EUR))) +
+  geom_boxplot()
+
+grid.arrange(age_plot, price_plot, ncol=2, nrow=1)
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(subset(car_data, Undamaged == TRUE & Kilometers_run >= 1000 & Transmission_type != ''), aes(x=Transmission_type, y=log10(Price_EUR))) +
+  geom_boxplot()
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(Kilometers_run, Price_EUR, color=Undamaged)) +
+  geom_point(alpha=0.9) + 
+#  xlim(1000, 500000) +
+  scale_y_log10()
+```
+
+```{r,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(age_in_years, Price_EUR)) +
+  geom_point(position = 'jitter', alpha = 0.1) + 
+  geom_smooth(method = lm) +
+  scale_y_log10()
+```
+
+## Multivariate analysis
+
+```{r,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(Year_of_manufacturing, Price_EUR, colour=factor(car_data$Undamaged))) +
+  geom_point(position = 'jitter') +
+  scale_y_log10() +
+  geom_smooth(method = lm, se=FALSE)
+```
+
+```{r,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(Year_of_manufacturing, Price_EUR)) +
+  geom_point(position='jitter', alpha=0.1) + 
+  coord_cartesian(ylim=(1:20000)) +
+  geom_line(stat = 'summary', fun.y = median)
+```
+
+```{r,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(Year_of_manufacturing, Kilometers_run)) +
+  geom_point(position='jitter', alpha=0.1) + 
+  coord_cartesian(ylim=(1:500000)) +
+  geom_line(stat = 'summary', fun.y = median)
+```
+
+We get a nice rainbow-like pattern, where the different colors seem to be grouped around specific price values. The year when the car was manufactured obviously seem to have an impact on the price of the car, otherwise the colors would be completely mixed all over the chart.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(x=Kilometers_run, y=Price_EUR, colour=factor(car_data$Year_of_manufacturing))) +
+  scale_y_log10() +
+  geom_point(alpha=0.4) + 
+  theme(legend.position='bottom')
 ```
