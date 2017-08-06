@@ -115,11 +115,8 @@ def is_metallic(string):
 def get_color(string):
     '''Extract color from string and return translated'''
     try:
-        match = re.match('(.*\s)(?:\(metál\))?', string)
-        if match:
-            return translate(match.group(1).strip())
-        else:
-            return np.nan
+        words = string.split(' ')
+        return translate(words[0])
     except Exception:
         return np.nan
 
