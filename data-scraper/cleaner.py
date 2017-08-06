@@ -121,6 +121,29 @@ def get_color(string):
         return np.nan
 
 
+def get_shade(color):
+    try:
+        words = color.split(' ')
+        if len(words) > 1:
+            return words[0]
+        else:
+            return 'Regular'
+    except Exception:
+        return np.nan
+
+
+def remove_shade(color):
+    try:
+        words = color.split(' ')
+        if len(words) > 1:
+            name = words[1]
+            return name[:1].upper() + name[1:]
+        else:
+            return color
+    except Exception:
+        return np.nan
+
+
 if __name__ == '__main__':
     cars = db.focus.find()
     df = pd.DataFrame(list(cars))
@@ -147,6 +170,8 @@ if __name__ == '__main__':
     df['Condition'] = df['Condition'].apply(translate)
     df['Fuel'] = df['Fuel'].apply(translate)
     df['Paint'] = df['Color'].apply(get_color)
+    df['Shade'] = df['Paint'].apply(get_shade)
+    df['Paint'] = df['Paint'].apply(remove_shade)
     df['Metallic'] = df['Color'].apply(is_metallic)
 
     # Drop unnecessary columns
