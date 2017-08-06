@@ -1,2 +1,5 @@
 __pycache__
 study.R
+.DS_Store
+.Rapp.history
+.Rhistory

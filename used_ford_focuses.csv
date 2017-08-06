@@ -1,4 +1,4 @@
-No_of_doors,C-Max_variant,Trunk_capacity_liters,Drive,Capacity,Kilometers_run,Form,Air_conditioning,Documents_valid_until,Own weight_kg,Horsepower,Condition,Price_EUR,Total_weight_kg,Fuel,Year_of_manufacturing,Month_of_manufacturing,Transmission_type,Gears,Documents,Paint,Metallic
+Doors,C-Max_variant,Trunk capacity liters,Drive,Capacity,Mileage km,Form,A/C type,Documents valid,Own weight kg,Horsepower,Condition,Price EUR,Total weight kg,Fuel,Manufactured year,Manufactured month,Transmission type,Gears,Documents,Paint,Metallic
 5.0,False,520.0,Front-wheel,1596.0,192000.0,Combi,Manual A/C,,1135.0,101.0,Normal,2678,1665.0,Gasoline,2003,,Automatic,4.0,"Valid, foreign",,
 5.0,False,385.0,Front-wheel,1560.0,205000.0,Hatchback,Manual A/C,2018-01-31,1352.0,90.0,Normal,2453,1790.0,Diesel,2005,,Manual,5.0,"Valid, domestic",,False
 5.0,True,,Front-wheel,1560.0,210599.0,Minivan,Manual A/C,,,109.0,Normal,2714,,Diesel,2003,,Manual,5.0,"Valid, domestic",,False
@@ -1158,7 +1158,7 @@ No_of_doors,C-Max_variant,Trunk_capacity_liters,Drive,Capacity,Kilometers_run,Fo
 5.0,False,482.0,Front-wheel,1560.0,203000.0,Combi,Manual A/C,2018-06-30,1391.0,109.0,Spared,3761,1880.0,Diesel,2007,,Manual,5.0,"Valid, domestic",,False
 5.0,True,460.0,Front-wheel,1798.0,210367.0,Minivan,Manual A/C,2019-05-31,1385.0,120.0,Normal,3761,1910.0,Gasoline,2004,,Manual,5.0,"Valid, domestic",Black,True
 5.0,True,460.0,Front-wheel,1753.0,270000.0,Minivan,Digital A/C,,1465.0,116.0,Spared,3761,1995.0,Diesel,2006,,Manual,5.0,"Valid, domestic",,
-5.0,True,460.0,Front-wheel,1560.0,2010000.0,Minivan,Manual A/C,2019-02-28,1390.0,109.0,Normal,3761,1920.0,Diesel,2005,,Manual,5.0,"Valid, domestic",,
+5.0,True,460.0,Front-wheel,1560.0,201000.0,Minivan,Manual A/C,2019-02-28,1390.0,109.0,Normal,3761,1920.0,Diesel,2005,,Manual,5.0,"Valid, domestic",,
 5.0,True,460.0,Front-wheel,1753.0,150000.0,Minivan,Manual A/C,2018-07-31,1465.0,116.0,Normal,3761,1995.0,Diesel,2006,,Manual,5.0,"Valid, domestic",,False
 5.0,True,460.0,Front-wheel,1798.0,177710.0,Minivan,Manual A/C,2019-06-30,1385.0,120.0,Normal,3761,1910.0,Gasoline,2003,,Manual,5.0,"Valid, domestic",,
 5.0,False,482.0,Front-wheel,1560.0,221639.0,Combi,Digital A/C,2017-11-30,1311.0,90.0,Normal,3769,1880.0,Diesel,2007,12,Manual,5.0,"Valid, domestic",Silver,True

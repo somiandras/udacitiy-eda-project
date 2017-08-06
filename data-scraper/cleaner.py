@@ -1,4 +1,3 @@
-import pprint as pp
 from pymongo import MongoClient
 import pandas as pd
 import numpy as np
@@ -13,26 +12,26 @@ dictionary = json.load(open('dictionary.json', 'r', encoding='utf-8'))
 
 # Column name translation map
 name_map = {
-    'Ajtók száma': 'No_of_doors',
+    'Ajtók száma': 'Doors',
     'C-Max': 'C-Max_variant',
-    'Csomagtartó (liter)': 'Trunk_capacity_liters',
+    'Csomagtartó (liter)': 'Trunk capacity liters',
     'Hajtás': 'Drive',
     'Hengerűrtartalom (cm³)': 'Capacity',
-    'Kilométeróra állása (km)': 'Kilometers_run',
+    'Kilométeróra állása (km)': 'Mileage km',
     'Kivitel': 'Form',
-    'Klíma fajtája': 'Air_conditioning',
-    'Műszaki vizsga érvényes': 'Documents_valid_until',
-    'Okmányok jellege': 'Documents_type',
-    'Saját tömeg (kg)': 'Own weight_kg',
+    'Klíma fajtája': 'A/C type',
+    'Műszaki vizsga érvényes': 'Documents valid',
+    'Okmányok jellege': 'Documents type',
+    'Saját tömeg (kg)': 'Own weight kg',
     'Sebességváltó fajtája': 'Transmission',
     'Szín': 'Color',
     'Teljesítmény (LE)': 'Horsepower',
     'Állapot': 'Condition',
-    'Ár (EUR)': 'Price_EUR',
-    'Össztömeg (kg)': 'Total_weight_kg',
+    'Ár (EUR)': 'Price EUR',
+    'Össztömeg (kg)': 'Total weight kg',
     'Üzemanyag': 'Fuel',
-    'Évjárat év': 'Year_of_manufacturing',
-    'Évjárat hónap': 'Month_of_manufacturing'
+    'Évjárat év': 'Manufactured year',
+    'Évjárat hónap': 'Manufactured month'
 }
 
 # Columns to drop from raw data
@@ -144,17 +143,17 @@ if __name__ == '__main__':
     # Translate categorical values
     df['Drive'] = df['Drive'].apply(translate)
     df['Form'] = df['Form'].apply(translate)
-    df['Air_conditioning'] = df['Air_conditioning'].apply(translate)
-    df['Transmission_type'] = df['Transmission'].apply(translate)
+    df['A/C type'] = df['A/C type'].apply(translate)
+    df['Transmission type'] = df['Transmission'].apply(translate)
     df['Gears'] = df['Transmission'].apply(get_gears)
-    df['Documents'] = df['Documents_type'].apply(translate)
+    df['Documents'] = df['Documents type'].apply(translate)
     df['Condition'] = df['Condition'].apply(translate)
     df['Fuel'] = df['Fuel'].apply(translate)
     df['Paint'] = df['Color'].apply(get_color)
     df['Metallic'] = df['Color'].apply(is_metallic)
 
     # Drop unnecessary columns
-    df.drop(['Transmission', 'Documents_type', 'Évjárat', 'Color'], axis=1, inplace=True)
+    df.drop(['Transmission', 'Documents type', 'Évjárat', 'Color'], axis=1, inplace=True)
 
     # Save to file
     df.to_csv('../used_ford_focuses.csv', encoding='utf-8', index=False)
