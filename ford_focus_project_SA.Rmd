@@ -1,0 +1,974 @@
+How much does a Ford Focus cost? - by Andras Somi
+========================================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+library(GGally)
+```
+
+```{r echo=FALSE, Load_the_Data}
+# Load the Data
+car_data <- read.csv('used_ford_focuses.csv', header=T, na.strings=c("","NA"))
+
+# Cast date type on column
+car_data$Documents.valid <- as.Date(car_data$Documents.valid, '%Y-%m-%d')
+
+# New variable for undamaged cars
+car_data$Undamaged <- car_data$Condition %in% 
+  c('Excellent', 'Normal', 'Undamaged', 'Spared', 'Recent')
+
+# New column to proxy the age
+car_data$Age.year <- 2017 - car_data$Manufactured.year
+
+# New column for mileage/year
+car_data$Mileage.year <- car_data$Mileage.km / car_data$Age.year
+
+# Subset for filtering out damaged and new cars
+undamaged_used_cars <- subset(car_data, 
+                              Undamaged == TRUE & 
+                                Mileage.km >= 1000 & 
+                                Age.year > 0)
+```
+
+## Getting the data
+
+For this project I downloaded and cleaned the data of more than 2500 listings of
+used Ford Focus cars from the biggest Hungarian online used car listing site,
+[Hasznaltauto.hu](https://www.hasznaltauto.hu). I chose specificaly the Ford 
+Focus for this task because:
+
+* it's one of the most popular models on this market in it's category,
+* it has a history of [almost 20 years](https://en.wikipedia.org/wiki/Ford_Focus
+) therefore quite a few versions are out there, 
+* it offers a wide range of technical and aesthetic varieties.
+
+So I hope the dataset is diverse enough to offer some interesting insights. 
+My major questions are quite obviuous: 
+
+1. What factors affect the price of a used Ford Focus the most on the
+(Hungarian) market? 
+2. Is it possible to predict the 'fair' value of a certain car, therefore find 
+pricing anomalies on the market? 
+
+#### Data wrangling
+
+I included the Python scripts for scraping and cleaning the data 
+in the `data-scraper` directory. I used `pandas`, `requests`, `BeautifulSoup` 
+and `pymongo` for MongoDB as an itermediary data store. 
+
+The main steps were:
+
+1. I collected the basic details of the cars, not including most of the 
+available text fields (eg. special technical and comfort specifications) and the
+longer descriptions from the sellers (though these could also hold valuable data
+for later analysis). 
+2. I dropped those fields thatdidn't contain enough observations and also 
+filtered out those listings where no price (in euro) was available. 
+3. I translated column names and categorical values from Hungarian to English, 
+and made sure that the final dataset contains no directly identifiable data (eg. 
+title, url or listing id).
+
+_(**Note:** The data was obtained on July, 27 and was not updated since then. 
+This sample is only a tiny fraction of the whole database of Hasznaltauto.hu, 
+and not intended for any purposes other than this learning project. I am not
+affiliated to Hasznaltauto.hu in any form.)_
+
+## The dataset
+
+```{r, echo=FALSE}
+str(car_data)
+```
+
+
+```{r, echo=FALSE}
+summary(car_data)
+```
+
+# Univariate Plots Section
+
+## Price
+
+Our main target variable in the analysis is the price. The distribution is 
+positively skewed, the long tail reaches up to well over EUR 40 000, while the 
+peak of the distribution is around only EUR 3000, with some observation as low
+as few hundred euros (or even lower). There's also a little secondary peak at 
+around EUR 14 000.
+
+```{r, echo=FALSE}
+summary(car_data$Price.EUR)
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(Price.EUR)) + 
+  geom_histogram(bins = 50)
+```
+
+The very low price points might belong to damaged cars. The dataset contains 
+descriptions for the condition of the cars, from which we can construct a 
+boolean variable for indicating whether according to the seller the car is not 
+damaged (eg. the condition is either 'Excellent', 'Normal', 'Undamaged', 
+'Spared' or 'Recent').
+
+From 2552 observation only 75 is labeled as damaged, and majority of it is 
+indeed offered for sale under EUR 1000. It might be useful to filter these out 
+later.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(Price.EUR)) + 
+  geom_histogram(bins = 50, aes(fill=Undamaged)) +
+  facet_grid(. ~ Undamaged)
+```
+
+Transforming the long-tail data (excluding damaged cars) reveals a more (but not
+completely) symmetrical distribution.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(subset(car_data, Undamaged == TRUE), aes(Price.EUR)) +
+  geom_histogram(bins = 25) +
+  scale_x_log10() +
+  ggtitle('Distribution of log10(Price.EUR)')
+```
+
+### Mileage
+
+The other important continous variable is the number of kilometers each car run 
+in their lifetime. The shape of the distribution (excluding damaged cars) is 
+fairly symmetrical, except the huge bar around 0. 
+
+This is due to cars in the dataset that are either new (some dealerships do 
+advertise new cars on the site) or incorrectly stated as having run 1 or very 
+few kilometers.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(subset(car_data, Undamaged == TRUE), aes(Mileage.km)) +
+  geom_histogram(binwidth = 20000)
+```
+
+I consider a car 'unusued' if it ran less than 1000km. To remove these and the 
+damaged cars we can construct a subset of the `car_data` dataframe called
+`undamaged_used_cars`.
+
+Using this subset mileage shows a prettier distribution: it's slightly 
+leptokurtic, but seems to be fairly close to normal distribution as the dashed 
+curve shows.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(undamaged_used_cars, aes(x=Mileage.km)) +
+  geom_histogram(aes(y=..density..), fill='white', color='grey', 
+                 binwidth = 20000) +
+  stat_function(fun=dnorm, 
+                args=c(mean=mean(undamaged_used_cars$Mileage.km), 
+                  sd=sd(undamaged_used_cars$Mileage.km)), 
+                color='blue', linetype='dashed') +
+  ggtitle('Densitiy by mileage of undamaged, used cars compared to normal distribution')
+```
+
+### Age
+
+From `Manufactured.year` column we can construct the `Age.year` variable, that
+is a reasonable proxy to the real age of the car (it might miss the real age by 
+maximum about half year in either direction as the data was downloaded slightly 
+after mid-2017). 
+
+Unfortunatelly only a small number of observations contain the month as well, 
+so there's no way of defining age more precisely.
+
+__Count of values of `Manufactured.month`:__
+``` {r, echo=FALSE}
+summary(factor(car_data$Manufactured.month))
+```
+
+The distribution is slightly negatively skewed with a noticable peak at the mode
+of 13 years and a smaller secondary peak around 5-6 years. The median is 10 
+years (slightly above the mean of 9.5 years), with the quartiles being 5 and 13
+years. 
+
+Plotting the density of theoretical normal distribution with the same mean and 
+standard error reveals the slight differences.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(undamaged_used_cars, aes(Age.year)) +
+  geom_histogram(binwidth = 1, aes(y=..density..), colour='grey', fill='white') +
+  stat_function(fun=dnorm, 
+      args=c(mean=mean(undamaged_used_cars$Age.year), 
+      sd=sd(undamaged_used_cars$Age.year)), color='blue', linetype='dashed')
+```
+
+### Mileage/year
+
+A potential metric for how intensively was a car used before can be the milage 
+per year (meaning how many kilometers did the car travel on average per year 
+during its lifetime). The higher the number, the more active was the usage. 
+
+This calculation have to exclude cars made in 2017 as their age in years is 0,
+therefore I updated the `undamaged_unused_cars` subset with a condition of 
+`Age.year > 0` (this is not disruptive change as it filters out only 8 
+observations on top of the existing conditions).
+
+This constructed variable is again positively skewed, the tail reaches
+above 7500km/year while the mode is around 13-14 000km/year. With a log10()
+transformation the distribution gets closer to normal.
+
+```{r, echo=FALSE }
+# Variables for constructing the proper normal distribution
+mean_of_mileage = mean(undamaged_used_cars$Mileage.year)
+sd_of_mileage = sd(undamaged_used_cars$Mileage.year)
+
+basic_plot <- ggplot(undamaged_used_cars, aes(Mileage.year)) +
+  geom_histogram(aes(y=..density..), colour='grey', fill='white', bins = 20) +
+  stat_function(fun=dnorm, 
+                args = c(mean=mean_of_mileage, sd=sd_of_mileage),
+                color='blue', linetype='dashed')
+
+# Variables for constructing the proper normal distribution
+mean_of_log_mileage = mean(log10(undamaged_used_cars$Mileage.year))
+sd_of_log_mileage = sd(log10(undamaged_used_cars$Mileage.year))
+
+log_plot <- ggplot(undamaged_used_cars, aes(log10(Mileage.year))) +
+  geom_histogram(aes(y=..density..), colour='grey', fill='white', bins = 20) +
+  stat_function(fun = dnorm, 
+                args=c(mean=mean_of_log_mileage, sd=sd_of_log_mileage),
+                color='blue', linetype='dashed')
+
+grid.arrange(basic_plot, log_plot, ncol=2)
+```
+
+### Form variants
+
+There seven different available format in the dataset, of which combi and 
+hatchback are the two most frequent, while the cabrios, notchbacks and sports 
+are quite rare.
+
+```{r, echo=FALSE}
+table(undamaged_used_cars$Form)
+```
+
+### Transmission, fuel, A/C, number of doors, documents
+
+In the dataset manual transmission and manual air-conditioning is by far the 
+dominant, just as 5-door variant over 3 or 4-doors types. 
+
+In terms of fuel the 
+two common options (gasoline and diesel) dominate over mixed and alternative 
+fuels (ethanol and electric drive). For each plot I excluded observations where 
+the data was missing.
+
+```{r, echo=FALSE}
+transmission <- ggplot(
+  undamaged_used_cars[!is.na(undamaged_used_cars$Transmission.type), ], 
+  aes(Transmission.type)) +
+  geom_bar()
+
+ac <- ggplot(
+  undamaged_used_cars[!is.na(undamaged_used_cars$A.C.type), ], 
+  aes(A.C.type)) +
+  geom_bar()
+
+fuel <- ggplot(
+  undamaged_used_cars[!is.na(undamaged_used_cars$Fuel), ], 
+  aes(reorder(Fuel, Fuel, FUN=length))) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust=1)) +
+  xlab('Fuel')
+
+
+door <- ggplot(
+  undamaged_used_cars[!is.na(undamaged_used_cars$Doors), ], 
+  aes(reorder(Doors, Doors, FUN = length))) +
+  geom_bar() +
+  xlab('Number of doors')
+
+grid.arrange(transmission, ac, fuel, door, ncol=2, nrow=2)
+```
+
+Some of the cars does not have proper legal papers for domestic usage (eg, they
+are imported or damaged, etc.). Most of the cars have proper valid documents but
+missing them could be a negative factor in pricing for the rest.
+
+```{r, echo=FALSE}
+table(undamaged_used_cars$Documents)
+```
+
+### Colors
+
+In 2069 cases we have data on the paint of the cars, not just the color but in 
+some cases also on the shade (light/dark) and whether the car has a metallic 
+or regular polish.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+color_plot <- ggplot(undamaged_used_cars[!is.na(undamaged_used_cars$Paint), ], 
+                     aes(reorder(Paint, Paint, FUN=length))) +
+  geom_bar() +
+  coord_flip()
+
+shade_plot <- ggplot(undamaged_used_cars[!is.na(undamaged_used_cars$Shade), ], 
+                     aes(reorder(Shade, Shade, FUN=length))) +
+  geom_bar()
+
+met_plot <- ggplot(undamaged_used_cars[!is.na(undamaged_used_cars$Metallic), ], 
+                     aes(reorder(Metallic, Metallic, FUN=length))) +
+  geom_bar()
+
+second_line <- arrangeGrob(shade_plot, met_plot, ncol=2)
+grid.arrange(color_plot, second_line, nrow=2, heights=c(4,2))
+```
+
+# Univariate Analysis
+
+### What is the structure of your dataset?
+
+The dataset contains 23 variables of 2552 used cars. The continous variables are
+`Manufactured.year` and `Mileage.km`, while other numerical columns act more
+like ordinal variables (eg. engine capacity, no. of doors, no. of gears, weight,
+etc.) as these are determined by the variant of the model.
+
+We also have a handful of interesting categorical variables, like the color and
+shade of the cars, the form type ('combi', 'hatchback', etc.).
+
+The categorical variables somewhat contradict my initial assumption that the
+higher number of possible variations of the model might create a diverse dataset. 
+Many of the categorical columns (eg. color, transmission type, fuel, etc.) are 
+heavily concentrated around one or few typical values, though 'exotic' variants
+are also present in the data.
+
+The most popular colors are silver, blue and gray, but if you think of silver as
+one kind of gray, gray is the most frequent color on the market by far. On the
+other end of the scale there are handful of 'exotic' colors, like champagne, 
+gold and magenta.
+
+### What is/are the main feature(s) of interest in your dataset?
+
+The price is our target variable. The distribution is not surprising, shows
+the natural traits of a monetary type variable, that can be treated by using 
+log10 transformation on it. That brings it closer to a normal(ish) distribution
+and hopefully it helps reveal clear relationships with other variables.
+
+There are also two interesting continous variables that might play important 
+role indetermining the price of the car: age and mileage. None of these show 
+extraordinary distributions, though they are not perfectly normal either, but
+the most common transformation do not provide meaningful benefits in these cases.
+
+### What other features in the dataset do you think will help support your \
+investigation into your feature(s) of interest?
+
+Besides age and mileage I expect some of the technical and aesthetical features
+to have some impact and to show relationship with the other variables, 
+namely:
+
+* Form factor
+* Fuel type
+* Transmission type
+* Type and validity of documents
+* Color and polish
+
+In a linear model we can use these via 'dummy' variables to gauge whether 
+differing from the most common values have significant impact on pricing.
+
+### Did you create any new variables from existing variables in the dataset?
+
+1. I derived the age (counted in years) from the year when the car was 
+manufactured. This does not alter the meaning of the data much, but it's more
+reasonable to use it when jitter is added (as age can have fractional values,
+while the year of manufacturing can't), even though it's just a proxy for the 
+real age.
+
+2. I created a variable for the average annual mileage (`Mileage.km`/`Age.year`) 
+that might help explaining the difference in price of cars with the same age. It
+shows that how actively the car was used during its lifetime.
+
+### Of the features you investigated, were there any unusual distributions? \
+Did you perform any operations on the data to tidy, adjust, or change the form \
+of the data? If so, why did you do this?
+
+The initial look at prices and age surfaced two issues with the data:
+
+1.it contains observations of damaged cars, that might have completely different 
+profile than the undamaged ones
+2. it contains cars that have only 1 or very few kilometers registered, so these
+are either new or mislabeled entries.
+
+I removed both groups in the `undamaged_used_cars` subset without dramatically
+reducing the size of the sample. By removing these factors we can focus on the 
+other important features in the dataset.
+
+```{r, echo=FALSE}
+cat('Total number of cars: ', nrow(car_data), 
+    '\nof which undamaged and used: ', nrow(undamaged_used_cars))
+```
+
+# Bivariate Plots Section
+
+Quick glance on pairplots of the continous variables, using the log of 
+`Price.EUR` and not transforming the others, we see a very high negative 
+correlation with Age (-0.9) and it materializes in a clear pattern on the point
+plot also.
+
+Total mileage (`Mileage.km`) also relatively high and even the constructed 
+average annual mileage (`Mileage.year`) has detectable correlation with price. 
+This correlation of `Mileage.year`is lower when I use the log-transformed 
+`Mileage.year`.
+
+```{r, echo=FALSE}
+# Create helper columns in the data.frame
+undamaged_used_cars$Price.log <- log10(undamaged_used_cars$Price.EUR)
+undamaged_used_cars$Mileage.year.log <- log10(undamaged_used_cars$Mileage.year)
+
+ggpairs(undamaged_used_cars, columns = c('Price.log', 'Mileage.km', 
+                                         'Age.year', 'Mileage.year'))
+```
+
+Plotting mileage and the log-transformed price for all cars (including damaged 
+and unused ones) reveal a negative relationship between the two variables, 
+supporting the intuitive idea that a car that has run more kilometers should be 
+cheaper. 
+
+On the other hand the pattern is quite dispersed, the connection between the two
+variables does not seem to be strong (the correlation was 0.48), even when 
+setting lower alpha to handle overplotting.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(Mileage.km, Price.EUR)) +
+  geom_point(alpha=0.2) + 
+  scale_y_log10()
+```
+
+When we use only the undamaged, used cars from of the dataset the picture is
+better, but the relationship is still not very strong in this form.
+
+```{r, echo=FALSE}
+ggplot(undamaged_used_cars, aes(Mileage.km, Price.EUR)) +
+  geom_point(alpha=0.2) + 
+  scale_y_log10() + 
+  geom_smooth(method = lm, se=F)
+```
+
+As age was calculated from the `Manufactured.year` column, it has discrete 
+values. This and the overplotting makes it hard to assess the relationship (we
+already know that the correlation is strong).
+
+```{r,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(Age.year, Price.EUR)) +
+  geom_point() +
+  scale_y_log10()
+```
+
+Adding some jitter and alpha, the picture gets clearer, though there are some
+seemingly outlier points in both direction, and the plot seems too dense around
+0 kilometer.
+
+```{r,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(Age.year, Price.EUR)) +
+  geom_point(position = 'jitter', alpha = 0.1) +
+  geom_point(stat = 'summary', fun.y = median, color='blue') +
+  scale_y_log10()
+```
+
+If we 'paint' barely used or damaged cars (red), some of the outliers and much
+of the crowdedness around 0 pops out. It reinforces the earlier idea to exclude
+these cars from the analysis.
+
+```{r,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(car_data, aes(Age.year, Price.EUR, color=factor(Undamaged == T & 
+                                                         Mileage.year >= 1000))) +
+  geom_point(alpha=0.5, position='jitter') +
+  scale_y_log10() +
+  theme(legend.position = 'bottom') +
+  labs(color='Undamaged and used')
+```
+
+It seems we find a rather strong relationship between the age and the price of
+a car, which is not surprising, but good to see it proved.
+
+```{r,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(undamaged_used_cars, aes(Age.year, Price.EUR)) +
+  geom_point(alpha=0.1, position='jitter') +
+  scale_y_log10() +
+  geom_smooth(method = lm, se=F)
+```
+
+Plotting mileage against age we get a rather dispersed pattern. The median 
+mileage in the different age cohorts does not change in a linear way with age, 
+the median mileage is roughly equal in ages between 8 and 14 years, while it 
+increases substantiall from age 1 to 8.
+
+```{r,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(undamaged_used_cars, aes(Age.year, Mileage.km)) +
+  geom_point(position='jitter', alpha=0.1) + 
+  geom_line(stat = 'summary', fun.y = median, color='blue')
+```
+
+It seems that the younger cars are more diverse in their annual average mileage 
+(points are spread in a wider range). This might be due to the relatively lower
+number of observations in lower age cohorts where a few extreme (maybe 
+erroneous) overall mileage value can affect the yearly average more in both 
+directions.
+
+In the higher age segments the distribution seems more consistent, the inter-
+quartile width is quite stable, while all the quartiles seem to follow a rather
+linear negative line.
+
+```{r,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(undamaged_used_cars, aes(Age.year, Mileage.year)) +
+  scale_y_log10() +
+  geom_point(position='jitter', alpha=0.1) + 
+  geom_line(stat = 'summary', fun.y = median, color='blue') +
+  geom_line(stat = 'summary', fun.y = quantile, fun.args = 0.25, 
+            linetype='dotted', color='blue') + 
+  geom_line(stat = 'summary', fun.y = quantile, fun.args = 0.75, 
+            linetype='dotted', color='blue')
+```
+
+Plotting the annual average mileage and the price (both on log-scales) does not
+reveal a very specific direct relationship.
+
+```{r,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(undamaged_used_cars, aes(Mileage.year, Price.EUR)) +
+  geom_point(position = 'jitter', alpha = 0.1) + 
+  scale_y_log10() + 
+  scale_x_log10()
+```
+
+There is  some sort of relationship between the type of fuel the car uses and 
+the age or the price, though above we already saw that alternative fuel types 
+(not diesel or gasoline) are quite rare in the dataset.
+
+Also cars with automatic transmission tend to be somewhat younger and a little 
+pricier, based on the boxplots (though the mean age and mean price is roughly
+the same in both groups).
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+
+age_fuel <- ggplot(subset(undamaged_used_cars, Fuel != ''), 
+                   aes(x=reorder(x=Fuel, X=Age.year, FUN=mean), y=Age.year)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust=1)) +
+  xlab('Fuel')
+
+price_fuel <- ggplot(subset(undamaged_used_cars, Fuel != ''), 
+                     aes(x=reorder(x=Fuel, X=log10(Price.EUR), FUN=mean), 
+                         y=log10(Price.EUR))) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust=1)) +
+  xlab('Fuel')
+
+price_trans <- ggplot(subset(undamaged_used_cars,Transmission.type != ''), 
+                      aes(x=reorder(x=Transmission.type, X=log10(Price.EUR), 
+                                    FUN=mean), y=log10(Price.EUR))) +
+  geom_boxplot() +
+  xlab('Transmission')
+
+age_trans <- ggplot(subset(undamaged_used_cars,Transmission.type != ''), 
+                    aes(x=reorder(x=Transmission.type, X=Age.year, 
+                                  FUN=mean), y=Age.year)) +
+  geom_boxplot() +
+  xlab('Transmission')
+
+grid.arrange(age_fuel, price_fuel,  age_trans, price_trans, ncol=2, nrow=2)
+```
+
+Engine capacity vs. Horsepower produces a great deal of overplotting. Capacity 
+here acts like an ordinal feature, therefore the points form horizontal lines 
+with a few outliers (138 cm3 is clearly not true, while 350hp might be the result 
+of some tuning).
+
+```{r, echo=FALSE,error=FALSE, message=FALSE, warning=FALSE}
+ggplot(undamaged_used_cars, aes(Capacity, Horsepower)) + 
+  geom_point(position='jitter', alpha=0.4)
+```
+
+2D bins help to avoid overplotting and also nicely packs the slightly different
+engine capacity values into bins. There's clearly a positive relationship between
+engince capacity and the power (not surprisingly).
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(undamaged_used_cars, aes(Capacity, Horsepower)) +
+  geom_bin2d()
+```
+
+Horsepower also seem to have a positive relatioship with price, though the
+ordinal nature of horsepower makes it hard to visualy validate this assumption.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(undamaged_used_cars, aes(Horsepower, Price.EUR)) +
+  geom_point(alpha=0.1, position='jitter') +
+  scale_y_log10() +
+  geom_smooth(method=lm, se=F)
+```
+
+Price distribution clearly differs by form variants.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(undamaged_used_cars, aes(x=Price.EUR, fill=Form, color=Form)) +
+  geom_density(alpha=0.1) +
+  scale_x_log10()
+```
+
+Separating the four major varieties minivans seem to differ to a large extent 
+from the other three distributions in its shape, while sedans seem to have a 
+reasonably lower median price. Minivans are also very different in terms of age 
+from the other major categories.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+# Group the most important varieties in a vector
+major_forms = c('Combi', 'Hatchback', 'Sedan', 'Minivan')
+
+group_summary <- summarise(
+  group_by(subset(undamaged_used_cars, Form %in% major_forms), Form),
+                     median_price=median(Price.EUR), 
+                     mean_price=mean(Price.EUR), 
+                     standard_deviation=sd(Price.EUR))
+group_summary
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(subset(undamaged_used_cars, Form %in% major_forms), 
+       aes(x=Price.EUR, fill=Form, color=Form)) +
+  geom_density(alpha=0.1) +
+  scale_x_log10() +
+  facet_wrap(~ Form) +
+  geom_vline(
+    aes(xintercept=median_price), 
+    group_summary, 
+    linetype='dashed', 
+    color='red', 
+    alpha=0.5) +
+  theme(legend.position = 'none')
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(subset(undamaged_used_cars, Form %in% major_forms), 
+       aes(x=Age.year, fill=Form, color=Form)) +
+  geom_density(alpha=0.1)
+```
+
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. How did the feature(s) of interest vary with other features in \
+the dataset?
+
+The major finding in this section is that the relationship between age and price
+seem to be a very strong one, especially when we filter out the damaged or unused
+cars from the sample. Most likely age is the major factor in the pricing of the
+cars.
+
+Also the mileage turned out to be much less important than I initially thought 
+at least directly plotted with the price, and in this aspect, the calculated
+`Mileage.year` variable did not show important relation to the price either.
+
+In the categorical features cars running on gasoline and with manual 
+transmission tend to be older and somewhat cheaper.
+
+### Did you observe any interesting relationships between the other features \
+(not the main feature(s) of interest)?
+
+Age and mileage are much less connected than I expected, many cars in the middle
+of the age range show similar milage and in a single age cohort mileage can vary
+in a wide range.
+
+Also it turned out that the Minivan variants have a very different age
+distribution than the other major categories. Some background to that: the mini-
+van version was initially called Ford Focus C-Max but from 2010 it is a separate
+model, not a Focus variant. This explains this phenomenon (the dataset contains
+a boolean feature for C-max, which is equivalent of Form being Minivan).
+
+### What was the strongest relationship you found?
+
+Clearly the relationship between age and (log) price, the older the car, the 
+smaller the price the seller asks for it.
+
+# Multivariate Plots Section
+
+Electric cars are clearly amongst the youngest and priciest ones, while diesel
+cars in the lower age segments tend to be on the cheaper end compared to 
+gasoline cars with the same age.
+
+```{r,  echo=FALSE}
+ggplot(undamaged_used_cars, 
+       aes(Age.year, Price.EUR, color=Fuel)) +
+  geom_point(position = 'jitter', alpha = 0.6) + 
+  scale_y_log10()
+```
+
+We already know that silver, gray and blue combis and hatchbacks are the most 
+common variations, but from the plot on the right it seems that buyers are 
+better off buying violet or gold, maybe turquoise cars.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+count_plot <- ggplot(undamaged_used_cars, aes(Form, Paint, z=Price.EUR)) +
+  stat_summary_2d(fun='length') +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust=0.5)) +
+  labs(fill='Count')
+
+price_plot <- ggplot(undamaged_used_cars, aes(Form, Paint, z=Price.EUR)) +
+  stat_summary_2d() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust=0.5)) +
+  labs(fill='Mean price')
+
+grid.arrange(count_plot, price_plot, nrow=1, ncol=2)
+```
+
+Not surprisingly the youngest and least used cars have licenses with the longest 
+validity, but also interesting to see, that for almost all age above 3-4 the 
+validity dates are disperesed in roughly the same range.
+
+```{r, echo=FALSE}
+ggplot(undamaged_used_cars[!is.na(undamaged_used_cars$Documents.valid), ], 
+       aes(Documents.valid, Age.year, z=Mileage.km/1000)) +
+  stat_summary_hex(fun='mean') +
+  labs(fill='Mean mileage (1000km)')
+```
+
+Minivans seem to differ not only in age and price distribution, the visible 
+relationship between these to features is also visibly different (the slope of 
+the regressionline is slightly smaller).
+
+```{r, echo=FALSE}
+ggplot(subset(undamaged_used_cars, Form %in% major_forms), 
+       aes(Age.year, Price.EUR, color=Mileage.year)) +
+  geom_point(alpha=0.5, position = 'jitter') +
+  scale_y_log10() +
+  facet_wrap(~Form) +
+  geom_smooth(method=lm, se=F)
+```
+
+A nice way to visualize the relationship between age, mileage and price is to 
+use the colors for the years. We get a nice rainbow-like pattern showing that 
+the price of cars with the same age tend to group around the same values. 
+
+Also the color 'bands' have a slight negative slopes showing that cars with the 
+same age but higher mileage tend to have lower price.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(undamaged_used_cars, aes(x=Mileage.km, y=Price.EUR, 
+                                colour=factor(Age.year))) +
+  scale_y_log10() +
+  geom_point(alpha=0.4) + 
+  theme(legend.position='bottom')
+```
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. Were there features that strengthened each other in terms of \
+looking at your feature(s) of interest?
+
+I think most of the important relationships were already revealed in the 
+bivariate section, but the multivariate plots mostly underpinned these findings.
+
+Clearly the most important is the role of age in the pricing (the older the car
+lower the price the seller can ask for it). Also it became clear that minivans 
+differ from the other frequent variants in many aspects (pricing and age, most 
+notably).
+
+### Were there any interesting or surprising interactions between features?
+
+One interesting thing is that even though the average annual mileage in itself 
+does not show strong relationship with price, in conjunction with age it might 
+still explain a smaller part of the variance in prices, as from cars with same
+age the one which has higher annual mileage tend to have lower price tag.
+
+One new observation is that among the younger cars the different type of fuels
+might have an impact on prices.
+
+### OPTIONAL: Did you create any models with your dataset? Discuss the \
+strengths and limitations of your model.
+
+I created a linear modell from some of the features of the dataset to model the 
+pricing of the cars. The target variable is the log10 of `Price.EUR`.
+
+The R-squared value is slightly over 90, which leaves some room for improvement, 
+still, it shows that the above mentioned variables do have significant impact in
+determining the price of the cars.
+
+The most important variable is `Age.year`, but I also included the log 
+transformed `Mileage.year` and also total `Mileage.km`, and added `Horsepower` 
+and some dummy variables of form variety, fuel, air-conditioning and license 
+validity.
+
+One of the limitations I encountered was that adding color and polish into the 
+model tends to improve R-squared but with the trade-off of losing few hundred 
+observations due to missing color information. This improvement comes at a great
+cost and threatens with overfitting (creating a model that works perfectly on a 
+certain small sample, but loses predictive power on bigger populations).
+
+Also I assume that extracting more data from the listings (eg. text fields and 
+descriptions) might help to improve the model with additional data that explains
+a little more of the variance of the prices.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+m <- lm(formula = log10(undamaged_used_cars$Price.EUR) ~ 
+          undamaged_used_cars$Age.year + 
+          log10(undamaged_used_cars$Mileage.year) + 
+          undamaged_used_cars$Mileage.km +
+          factor(undamaged_used_cars$Fuel == "Diesel") + 
+          factor(undamaged_used_cars$Fuel == "Gasoline") +
+          factor(undamaged_used_cars$Form == 'Minivan') +
+          factor(undamaged_used_cars$Documents == 'Valid, domestic') +
+          factor(undamaged_used_cars$A.C.type == 'Manual A/C') +
+          undamaged_used_cars$Horsepower
+          )
+
+summary(m)
+```
+
+------
+
+# Final Plots and Summary
+
+### Plot One
+```{r,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(undamaged_used_cars, 
+       aes(Age.year, Price.EUR, color=Mileage.year)) +
+  geom_point(position = 'jitter', alpha = 0.8) + 
+  geom_smooth(method = lm, linetype='dashed', color='orange', se=F) +
+  scale_y_log10(breaks=c(0, 1000, 2000, 3000, 5000, 10000, 15000, 25000), minor_breaks=NULL) +
+  scale_colour_gradient(low = "dark blue", high = "white", space = "Lab",
+                        na.value = "red", guide = "colourbar") +
+  theme_dark() +
+  labs(color='Avg. annual mileage') +
+  xlab('Age in years') +
+  ylab('Price (EUR) - log scale') +
+  ggtitle('Age and price with average annual mileage')
+```
+
+### Description One
+
+I particularly like this plot because it packs two of the most important
+relationships in this analysis into one graph:
+
+1. Age has a negative impact on price, the points are rather close to the
+regression line with negative slope.
+
+2. In any age group the cars with lower average milage tend to have higher 
+prices. The points above the regression line seem to be darker in general, but
+this gets even sharper in the lower half of the date range.
+
+
+### Plot Two
+```{r echo=FALSE, Plot_Two}
+# Create Fuel.group variable, and label alternative fuel types with 'Other'
+main_fuels = c('Gasoline', 'Diesel')
+undamaged_used_cars$Fuel <- as.character(undamaged_used_cars$Fuel)
+undamaged_used_cars$Fuel.group <- ifelse(
+  undamaged_used_cars$Fuel %in% main_fuels, 
+  undamaged_used_cars$Fuel, 
+  'Other')
+
+# Group dataset to have median price by form and fuel type
+grouped_summary = subset(undamaged_used_cars, Form %in% major_forms) %>% 
+  group_by(Form, Fuel.group) %>% 
+  summarise(median_price=median(Price.EUR))
+
+ggplot(subset(undamaged_used_cars, Form %in% major_forms), 
+       aes(x=Price.EUR, fill=Fuel.group, color=Fuel.group)) +
+  geom_density(alpha=0.1) +
+  scale_x_log10() +
+  geom_vline(
+    aes(xintercept=median_price, color=Fuel.group), 
+    linetype='dashed',  
+    grouped_summary) +
+  facet_wrap(~ Form) +
+  theme(legend.position = 'right') +
+  xlab('Price (EUR) - log scale') +
+  ylab('Density') +
+  ggtitle('Price distributions by fuel type and form variants with the median prices') +
+  labs(fill='Fuel type', color='Fuel type')
+```
+
+### Description Two
+
+I like this plot because it clearly visualizes some differences between the main 
+form varieties and fuel types. This plot helped me to recognize how different is
+the minivan from the others, which in turn helped me to learn the special 
+history of the C-max variant (starting as a variant, later becoming a separate 
+model).
+
+1. The minivan has a much narrower price distribution, the cars are more tightly
+grouped around they median and mean (the distribution is pretty symmetrical too).
+
+2.This is the only variant where there are only diesel or gasoline fueled cars 
+in the sample (no alternative fuels)
+
+For the other models gasoline cars tend to have slightly (or even substantially) 
+lower median price than diesel ones.
+
+### Plot Three
+```{r echo=FALSE, Plot_Three}
+# Group colors into thre groups
+common_colors <- c('Silver', 'Blue', 'Gray', 'Black', 'White')
+exotic_colors <- c('Orange', 'Champagne', 'Turquoise', 'Olive', 'Purple', 
+                   'Beige', 'Violet', 'Yellow', 'Magenta', 'Gold')
+
+undamaged_used_cars$Paint.group = ifelse(
+  undamaged_used_cars$Paint %in% common_colors, 
+  'Common', 
+  ifelse(undamaged_used_cars$Paint %in% exotic_colors, 
+         'Exotic', 
+         'Regular'))
+
+ggplot(subset(undamaged_used_cars, 
+              is.na(Paint) == FALSE & Form %in% major_forms), 
+       aes(x=Age.year, y=Price.EUR, color=Paint.group)) +
+  geom_point(position='jitter', alpha=0.8) +
+  scale_y_log10() +
+  facet_grid(Form~factor(Paint.group, 
+                         levels = c('Common', 'Regular', 'Exotic'))) +
+  theme(legend.position = 'none') +
+  geom_smooth(method=lm, se=F, color='yellow', linetype='dashed', size=0.5) +
+  xlab('Age (years)') +
+  ylab('Price (EUR) - log scale') +
+  ggtitle('Age and price as function of color and form') +
+  theme_dark()
+```
+
+### Description Three
+
+Finally a visual proof that the color of the car has no meaningful impact on the
+price the seller asks, neither if the car has one of the most frequent colors nor
+if it's one of the exotic variants. All the plots show very similar distribution,
+except where we have too few observation, and exepct the minivans, that we 
+already saw somewhat differs from the other categories.
+
+No surprise that none of the variables in connection with the color was included
+in the linear model above. 
+
+Aside from this I like how the `facet_grid()` let's me visualize at least 4 
+variables, not counting the aesthetics of the points, like size, color and 
+shape.
+
+------
+
+# Reflection
+
+It was exciting to explore a very recent, up-to-date, real-life dataset that I
+personally collected. The dataset also reinforced some of my initial assumptions
+(eg. the age must be an important factor) but also falsified a few (like the 
+major importance of mileage in the pricing) and answered my questions, like does
+the color of the car matter in the price.
+
+The custom dataset was not as clean and well balanced between different features
+as many of the usual learning datasets (eg. some of the features turned out to 
+be concentrated around one or few values). Therefore I had to go back to the 
+cleaning script several times, when something popped out in first part of this 
+analysis.
+
+I plan to work on with this dataset, and also I would like to broaden it, in two
+ways:
+
+1. Get more data of each listing, eg. qualitative technical and convenience 
+features from text fields, geolocation (where is the seller/car located), etc. 
+These might help to improve the predicative power of the model.
+
+2. Include some other popoular car brands and models in the sample to have a
+significantly larger dataset, and to see how different (or similar) are the 
+factors and their weights in determining the price of each car.
+
+I also believe that by analysing the longer descriptions that the sellers 
+providing with NLP tools and machine learning might reveal some more important
+patterns, and in conjunction with the other data it could even reveal some clues
+about the genuineness of the listings, and help filter out scams and fraudulent 
+sellers.
